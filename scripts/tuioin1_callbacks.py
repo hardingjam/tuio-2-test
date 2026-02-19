@@ -59,7 +59,7 @@ def onTouches(dat, events):
 	# Get the streaming mode toggle
 	streamConstant = parent().par.Streamconstant.eval()
 	debug(streamConstant)
-	# Loop through the events
+	# Loop through the events.
 	for event in events:
 		# Check if we should skip frames with no changes
 		if not streamConstant:
