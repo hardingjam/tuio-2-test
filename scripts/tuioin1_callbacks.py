@@ -13,7 +13,7 @@
 # 	touchesMove - a list of touches that moved this event
 #	touchesEnd - a list of touches that ended this event
 # 	touchesNoChange - a list of pre-existing touches that didn't move
-#						or end this event
+#						or end this event.
 #
 # each of those touches is a TUIOTouch object which has the following members
 #	id
