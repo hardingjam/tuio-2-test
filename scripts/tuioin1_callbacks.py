@@ -81,7 +81,7 @@ def onTouches(dat, events):
 		symbolTouches = []
 
 		for touch in changedTouches:
-			profile = touch.profile
+			profile = touch.profile or ""
 			if "/tuio2/ptr" in profile or profile == "":
 				pointerTouches.append(touch)
 			elif "/tuio2/bnd" in profile:
@@ -94,86 +94,80 @@ def onTouches(dat, events):
 		# All active touches for alive messages
 		allActiveTouches = event.touchesStart + event.touchesMove + event.touchesNoChange
 
-		# Send POINTER messages (fingers, stylus)
-		activePtrIds = [t.id for t in allActiveTouches if "/tuio2/ptr" in t.profile or t.profile == ""]
-		if activePtrIds:
-			sendOSC(webserverDAT, "/tuio2/ptr", ["alive"] + activePtrIds)
+		# Collect all active session IDs for /tuio2/alv
+		allActiveIds = [t.id for t in allActiveTouches]
 
-			for touch in pointerTouches:
-				sendOSC(webserverDAT, "/tuio2/ptr", [
-					"set",
-					touch.id,
-					0,  # tu_id
-					touch.classId,  # c_id
-					touch.u,
-					touch.v,
-					touch.angleZ,
-					0.0,  # shear
-					0.0,  # radius
-					0.0   # pressure
-				])
+		# Send POINTER messages (fingers, stylus)
+		# /tuio2/ptr set args: [sessionId, tuId, cId, x, y, angle, shear, radius, press]
+		for touch in pointerTouches:
+			sendOSC(webserverDAT, "/tuio2/ptr", [
+				touch.id,       # sessionId
+				touch.typeId if hasattr(touch, 'typeId') and touch.typeId is not None else 0,  # tuId
+				touch.classId,  # cId
+				touch.u or 0.0,
+				touch.v or 0.0,
+				touch.angleZ or 0.0,
+				touch.shear if hasattr(touch, 'shear') and touch.shear is not None else 0.0,
+				touch.radius if hasattr(touch, 'radius') and touch.radius is not None else 0.0,
+				touch.pressure if hasattr(touch, 'pressure') and touch.pressure is not None else 0.0
+			])
 
 		# Send BOUNDS messages (phones, tablets, objects)
-		activeBndIds = [t.id for t in allActiveTouches if "/tuio2/bnd" in t.profile]
-		if activeBndIds:
-			sendOSC(webserverDAT, "/tuio2/bnd", ["alive"] + activeBndIds)
-
-			for touch in boundsTouches:
-				sendOSC(webserverDAT, "/tuio2/bnd", [
-					"set",
-					touch.id,
-					0,  # tu_id
-					touch.classId,  # c_id
-					touch.u,
-					touch.v,
-					touch.angleZ,
-					touch.width,
-					touch.height,
-					touch.area
-				])
+		# /tuio2/bnd set args: [sessionId, x, y, angle, size.x, size.y, area]
+		for touch in boundsTouches:
+			sendOSC(webserverDAT, "/tuio2/bnd", [
+				touch.id,       # sessionId
+				touch.u or 0.0,
+				touch.v or 0.0,
+				touch.angleZ or 0.0,
+				touch.width or 0.0,
+				touch.height or 0.0,
+				touch.area or 0.0
+			])
 
 		# Send SYMBOL messages
-		activeSymIds = [t.id for t in allActiveTouches if "/tuio2/sym" in t.profile]
-		if activeSymIds:
-			sendOSC(webserverDAT, "/tuio2/sym", ["alive"] + activeSymIds)
-
-			for touch in symbolTouches:
-				group = touch.symGroup if hasattr(touch, 'symGroup') else ""
-				data = touch.symData if hasattr(touch, 'symData') else str(touch.classId)
-
-				sendOSC(webserverDAT, "/tuio2/sym", [
-					"set",
-					touch.id,
-					0,  # tu_id
-					touch.classId,  # c_id
-					group,
-					data
-				])
+		# /tuio2/sym set args: [sessionId, tuId, cId, group, data]
+		for touch in symbolTouches:
+			group = touch.symGroup if hasattr(touch, 'symGroup') and touch.symGroup is not None else ""
+			data = touch.symData if hasattr(touch, 'symData') and touch.symData is not None else str(touch.classId)
+			sendOSC(webserverDAT, "/tuio2/sym", [
+				touch.id,       # sessionId
+				touch.typeId if hasattr(touch, 'typeId') and touch.typeId is not None else 0,  # tuId
+				touch.classId,  # cId
+				group,
+				data
+			])
 
 		# Send TOKEN messages
-		activeTokIds = [t.id for t in allActiveTouches if "/tuio2/tok" in t.profile]
-		if activeTokIds:
-			sendOSC(webserverDAT, "/tuio2/tok", ["alive"] + activeTokIds)
-
-			for touch in tokenTouches:
-				sendOSC(webserverDAT, "/tuio2/tok", [
-					"set",
-					touch.id,
-					0,  # tu_id
-					touch.classId,  # c_id
-					touch.u,
-					touch.v,
-					touch.angleZ
-				])
+		# /tuio2/tok set args: [sessionId, tuId, cId, x, y, angle]
+		for touch in tokenTouches:
+			sendOSC(webserverDAT, "/tuio2/tok", [
+				touch.id,       # sessionId
+				touch.typeId if hasattr(touch, 'typeId') and touch.typeId is not None else 0,  # tuId
+				touch.classId,  # cId
+				touch.u or 0.0,
+				touch.v or 0.0,
+				touch.angleZ or 0.0
+			])
 
 		# Send frame message
+		# /tuio2/frm args: [frameId, oscTime, dim, source]
+		# oscTime must be an NTP 64-bit integer (seconds since 1900 * 2^32)
+		# event.timestamp is already seconds since Jan 1 1900
+		oscTime = int(event.timestamp * (2**32))
+		width = event.width if hasattr(event, 'width') and event.width else 0
+		height = event.height if hasattr(event, 'height') and event.height else 0
+		dim = (width << 16) | height  # TUIO2 dim encodes width+height as one int
 		sendOSC(webserverDAT, "/tuio2/frm", [
-			"frm",
-			int(event.timestamp * 1000),
-			event.timestamp,
-			event.width if hasattr(event, 'width') else 0,
-			event.height if hasattr(event, 'height') else 0
+			int(event.timestamp * 1000) & 0xFFFFFFFF,  # frameId (use lower 32 bits of ms timestamp)
+			oscTime,
+			dim,
+			event.source if hasattr(event, 'source') and event.source else "TouchDesigner"
 		])
+
+		# Send alive message — must come after frm and component messages
+		# /tuio2/alv args: [sessionId, sessionId, ...]
+		sendOSC(webserverDAT, "/tuio2/alv", allActiveIds)
 
 	return
 
